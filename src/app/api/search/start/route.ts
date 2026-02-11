@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { ALLOWED_LOCATIONS } from '@/lib/apify-locations';
 import type { SearchFilters } from '@/types/database';
 
 export async function POST(request: Request) {
@@ -85,6 +86,34 @@ export async function POST(request: Request) {
         apifyInput[key] = value.map((v) => mapToApifyValue(key, v));
       } else {
         apifyInput[key] = value;
+      }
+    }
+
+    // Resolve contact_location: match user input to allowed values,
+    // move unresolvable entries to contact_city as fallback
+    if (Array.isArray(apifyInput.contact_location)) {
+      const resolved: string[] = [];
+      const fallbackCity: string[] = [];
+
+      for (const raw of apifyInput.contact_location as string[]) {
+        const match = resolveLocation(raw);
+        if (match) {
+          resolved.push(match);
+        } else {
+          fallbackCity.push(raw);
+        }
+      }
+
+      if (resolved.length > 0) {
+        apifyInput.contact_location = resolved;
+      } else {
+        delete apifyInput.contact_location;
+      }
+
+      // Merge unresolved locations into contact_city
+      if (fallbackCity.length > 0) {
+        const existing = (apifyInput.contact_city as string[]) || [];
+        apifyInput.contact_city = [...existing, ...fallbackCity];
       }
     }
 
@@ -199,6 +228,19 @@ const APIFY_VALUE_MAP: Record<string, Record<string, string>> = {
 
 function mapToApifyValue(field: string, uiValue: string): string {
   return APIFY_VALUE_MAP[field]?.[uiValue] ?? uiValue;
+}
+
+/** Resolve a user-entered location to an allowed Apify value.
+ *  "piemonte" → "piemonte, italy", "italy" → "italy", "xyz" → null */
+function resolveLocation(input: string): string | null {
+  const lower = input.toLowerCase().trim();
+  // Exact match
+  if (ALLOWED_LOCATIONS.has(lower)) return lower;
+  // Prefix match: "piemonte" → "piemonte, italy"
+  for (const loc of ALLOWED_LOCATIONS) {
+    if (loc.startsWith(lower + ', ')) return loc;
+  }
+  return null;
 }
 
 function hasAtLeastOneFilter(filters: SearchFilters): boolean {
