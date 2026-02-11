@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import TagInput from "@/components/ui/TagInput";
 import ChipSelect from "@/components/ui/ChipSelect";
 import Button from "@/components/ui/Button";
@@ -41,8 +42,7 @@ const FUNCTIONAL_OPTIONS = [
 const EMAIL_STATUS_OPTIONS = ["Validated", "Not Validated", "Unknown"];
 
 const COMPANY_SIZE_OPTIONS = [
-  "0-1",
-  "2-10",
+  "1-10",
   "11-20",
   "21-50",
   "51-100",
@@ -51,7 +51,10 @@ const COMPANY_SIZE_OPTIONS = [
   "501-1000",
   "1001-2000",
   "2001-5000",
-  "10000+",
+  "5001-10000",
+  "10001-20000",
+  "20001-50000",
+  "50000+",
 ];
 
 const FUNDING_OPTIONS = [
@@ -107,6 +110,7 @@ const inputStyle: React.CSSProperties = {
 
 export default function NewSearchPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // --- Form state ---
   const [searchName, setSearchName] = useState("");
@@ -137,6 +141,44 @@ export default function NewSearchPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
+
+  // --- Load template if templateId is in URL ---
+  useEffect(() => {
+    const templateId = searchParams.get("templateId");
+    if (!templateId) return;
+
+    const supabase = createClient();
+    supabase
+      .from("templates")
+      .select("*")
+      .eq("id", templateId)
+      .single()
+      .then(({ data }) => {
+        if (!data) return;
+        const f = data.filters as SearchFilters;
+
+        if (f.file_name) setSearchName(f.file_name);
+        if (f.fetch_count) setFetchCount(f.fetch_count);
+        if (f.contact_job_title) setJobTitleInclude(f.contact_job_title);
+        if (f.contact_not_job_title) setJobTitleExclude(f.contact_not_job_title);
+        if (f.seniority_level) setSeniority(f.seniority_level);
+        if (f.functional_level) setFunctional(f.functional_level);
+        if (f.contact_location) setLocationInclude(f.contact_location);
+        if (f.contact_city) setCityInclude(f.contact_city);
+        if (f.contact_not_location) setLocationExclude(f.contact_not_location);
+        if (f.contact_not_city) setCityExclude(f.contact_not_city);
+        if (f.email_status) setEmailStatus(f.email_status);
+        if (f.company_domain) setCompanyDomain(f.company_domain);
+        if (f.company_industry) setIndustryInclude(f.company_industry);
+        if (f.company_not_industry) setIndustryExclude(f.company_not_industry);
+        if (f.company_keywords) setKeywordsInclude(f.company_keywords);
+        if (f.company_not_keywords) setKeywordsExclude(f.company_not_keywords);
+        if (f.size) setCompanySize(f.size);
+        if (f.min_revenue) setMinRevenue(f.min_revenue);
+        if (f.max_revenue) setMaxRevenue(f.max_revenue);
+        if (f.funding) setFunding(f.funding);
+      });
+  }, [searchParams]);
 
   // --- Derived state ---
   const showLeadCountWarning = fetchCount > 10000;
@@ -245,7 +287,7 @@ export default function NewSearchPage() {
       const res = await fetch("/api/search/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildFilters()),
+        body: JSON.stringify({ filters: buildFilters() }),
       });
 
       if (!res.ok) {

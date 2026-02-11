@@ -74,11 +74,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Build Apify payload -- keys in SearchFilters already match the Apify input schema
+    // Build Apify payload — map UI display values to Apify API values
     const apifyInput: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(filters)) {
       if (key === 'file_name') continue; // file_name is internal only
-      if (value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0)) {
+      if (value === undefined || value === null || value === '') continue;
+      if (Array.isArray(value) && value.length === 0) continue;
+
+      if (Array.isArray(value)) {
+        apifyInput[key] = value.map((v) => mapToApifyValue(key, v));
+      } else {
         apifyInput[key] = value;
       }
     }
@@ -103,8 +108,17 @@ export async function POST(request: Request) {
         })
         .eq('id', search.id);
 
+      // Try to extract a readable error from Apify's response
+      let userMessage = 'Errore nell\'avvio della ricerca su Apify';
+      try {
+        const apifyError = JSON.parse(errorText);
+        if (apifyError?.error?.message) {
+          userMessage = apifyError.error.message;
+        }
+      } catch { /* use default message */ }
+
       return NextResponse.json(
-        { error: 'Errore nell\'avvio della ricerca su Apify' },
+        { error: userMessage },
         { status: 500 }
       );
     }
@@ -129,6 +143,62 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+/** Maps UI display labels to the exact values the Apify actor accepts */
+const APIFY_VALUE_MAP: Record<string, Record<string, string>> = {
+  seniority_level: {
+    'Founder': 'founder',
+    'Owner': 'owner',
+    'C-Level': 'c_suite',
+    'Director': 'director',
+    'Partner': 'partner',
+    'VP': 'vp',
+    'Head': 'head',
+    'Manager': 'manager',
+    'Senior': 'senior',
+    'Entry': 'entry',
+    'Trainee': 'trainee',
+  },
+  functional_level: {
+    'C-Level': 'c_suite',
+    'Finance': 'finance',
+    'Product': 'product_management',
+    'Engineering': 'engineering',
+    'Design': 'design',
+    'Education': 'education',
+    'HR': 'human_resources',
+    'IT': 'information_technology',
+    'Legal': 'legal',
+    'Marketing': 'marketing',
+    'Operations': 'operations',
+    'Sales': 'sales',
+    'Support': 'support',
+  },
+  email_status: {
+    'Validated': 'validated',
+    'Not Validated': 'not_validated',
+    'Unknown': 'unknown',
+  },
+  funding: {
+    'Seed': 'seed',
+    'Angel': 'angel',
+    'Series A': 'series_a',
+    'Series B': 'series_b',
+    'Series C': 'series_c',
+    'Series D': 'series_d',
+    'Series E': 'series_e',
+    'Series F': 'series_f',
+    'Venture': 'venture_round',
+    'Debt Financing': 'debt_financing',
+    'Convertible Note': 'convertible_note',
+    'Private Equity': 'private_equity_round',
+    'Other': 'other_round',
+  },
+};
+
+function mapToApifyValue(field: string, uiValue: string): string {
+  return APIFY_VALUE_MAP[field]?.[uiValue] ?? uiValue;
 }
 
 function hasAtLeastOneFilter(filters: SearchFilters): boolean {
