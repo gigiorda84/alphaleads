@@ -67,7 +67,7 @@ export async function GET(
     }
 
     return NextResponse.json({
-      data: leads || [],
+      leads: leads || [],
       total: count || 0,
       page,
       limit,

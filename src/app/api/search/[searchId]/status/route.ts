@@ -66,11 +66,13 @@ export async function GET(
             })
             .eq('id', search.id);
 
-          return NextResponse.json({
-            status: 'failed',
-            leads_count: 0,
-            error_message: `La ricerca ha superato il tempo massimo di ${TIMEOUT_MINUTES} minuti`,
-          });
+          const { data: timedOutSearch } = await supabase
+            .from('searches')
+            .select('*')
+            .eq('id', search.id)
+            .single();
+
+          return NextResponse.json({ search: timedOutSearch ?? search });
         }
       }
 
@@ -105,14 +107,20 @@ export async function GET(
             })
             .eq('id', search.id);
 
-          return NextResponse.json({
-            status: 'failed',
-            leads_count: 0,
-            error_message: 'Errore nel recupero dei risultati dal dataset Apify',
-          });
+          const { data: failedDatasetSearch } = await supabase
+            .from('searches')
+            .select('*')
+            .eq('id', search.id)
+            .single();
+
+          return NextResponse.json({ search: failedDatasetSearch ?? search });
         }
 
         const items: Record<string, unknown>[] = await datasetResponse.json();
+        console.log(`[Status] Dataset fetched: ${items.length} items for search ${search.id}`);
+        if (items.length > 0) {
+          console.log('[Status] Sample item keys:', Object.keys(items[0]).join(', '));
+        }
 
         // Deduplicate results
         const deduplicatedItems = deduplicateLeads(items);
@@ -121,50 +129,53 @@ export async function GET(
         if (deduplicatedItems.length > 0) {
           const leads = deduplicatedItems.map((item) => ({
             search_id: search.id,
-            first_name: item.first_name ?? null,
-            last_name: item.last_name ?? null,
-            full_name: item.full_name ?? null,
-            job_title: item.job_title ?? null,
-            headline: item.headline ?? null,
-            functional_level: item.functional_level ?? null,
-            seniority_level: item.seniority_level ?? null,
-            email: item.email ?? null,
-            mobile_number: item.mobile_number ?? null,
-            personal_email: item.personal_email ?? null,
-            linkedin: item.linkedin ?? null,
-            city: item.city ?? null,
-            state: item.state ?? null,
-            country: item.country ?? null,
-            company_name: item.company_name ?? null,
-            company_domain: item.company_domain ?? null,
-            company_website: item.company_website ?? null,
-            company_linkedin: item.company_linkedin ?? null,
-            company_linkedin_uid: item.company_linkedin_uid ?? null,
-            company_size: item.company_size ?? null,
-            industry: item.industry ?? null,
-            company_description: item.company_description ?? null,
-            company_annual_revenue: item.company_annual_revenue ?? null,
-            company_annual_revenue_clean: item.company_annual_revenue_clean ?? null,
-            company_total_funding: item.company_total_funding ?? null,
-            company_total_funding_clean: item.company_total_funding_clean ?? null,
-            company_founded_year: item.company_founded_year ?? null,
-            company_phone: item.company_phone ?? null,
-            company_street_address: item.company_street_address ?? null,
-            company_city: item.company_city ?? null,
-            company_state: item.company_state ?? null,
-            company_country: item.company_country ?? null,
-            company_postal_code: item.company_postal_code ?? null,
-            company_full_address: item.company_full_address ?? null,
-            company_market_cap: item.company_market_cap ?? null,
-            keywords: item.keywords ?? null,
-            company_technologies: item.company_technologies ?? null,
+            first_name: toStr(item.first_name),
+            last_name: toStr(item.last_name),
+            full_name: toStr(item.full_name),
+            job_title: toStr(item.job_title),
+            headline: toStr(item.headline),
+            functional_level: toStr(item.functional_level),
+            seniority_level: toStr(item.seniority_level),
+            email: toStr(item.email),
+            mobile_number: toStr(item.mobile_number),
+            personal_email: toStr(item.personal_email),
+            linkedin: toStr(item.linkedin),
+            city: toStr(item.city),
+            state: toStr(item.state),
+            country: toStr(item.country),
+            company_name: toStr(item.company_name),
+            company_domain: toStr(item.company_domain),
+            company_website: toStr(item.company_website),
+            company_linkedin: toStr(item.company_linkedin),
+            company_linkedin_uid: toStr(item.company_linkedin_uid),
+            company_size: toStr(item.company_size),
+            industry: toStr(item.industry),
+            company_description: toStr(item.company_description),
+            company_annual_revenue: toStr(item.company_annual_revenue),
+            company_annual_revenue_clean: toNum(item.company_annual_revenue_clean),
+            company_total_funding: toStr(item.company_total_funding),
+            company_total_funding_clean: toNum(item.company_total_funding_clean),
+            company_founded_year: toInt(item.company_founded_year),
+            company_phone: toStr(item.company_phone),
+            company_street_address: toStr(item.company_street_address),
+            company_city: toStr(item.company_city),
+            company_state: toStr(item.company_state),
+            company_country: toStr(item.company_country),
+            company_postal_code: toStr(item.company_postal_code),
+            company_full_address: toStr(item.company_full_address),
+            company_market_cap: toStr(item.company_market_cap),
+            keywords: toStrArray(item.keywords),
+            company_technologies: toStrArray(item.company_technologies),
           }));
 
           // Batch insert in chunks of 500 to avoid payload limits
           const BATCH_SIZE = 500;
           for (let i = 0; i < leads.length; i += BATCH_SIZE) {
             const batch = leads.slice(i, i + BATCH_SIZE);
-            await supabase.from('leads').insert(batch);
+            const { error: insertError } = await supabase.from('leads').insert(batch);
+            if (insertError) {
+              console.error('Errore inserimento leads batch:', insertError);
+            }
           }
         }
 
@@ -179,11 +190,13 @@ export async function GET(
           })
           .eq('id', search.id);
 
-        return NextResponse.json({
-          status: 'succeeded',
-          leads_count: leadsCount,
-          error_message: null,
-        });
+        const { data: succeededSearch } = await supabase
+          .from('searches')
+          .select('*')
+          .eq('id', search.id)
+          .single();
+
+        return NextResponse.json({ search: succeededSearch ?? search });
       } else if (apifyStatus === 'FAILED' || apifyStatus === 'ABORTED' || apifyStatus === 'TIMED-OUT') {
         const errorMsg =
           runData.data?.statusMessage || `La ricerca Apify e terminata con stato: ${apifyStatus}`;
@@ -196,27 +209,27 @@ export async function GET(
           })
           .eq('id', search.id);
 
-        return NextResponse.json({
-          status: 'failed',
-          leads_count: 0,
-          error_message: errorMsg,
-        });
+        const { data: failedApifySearch } = await supabase
+          .from('searches')
+          .select('*')
+          .eq('id', search.id)
+          .single();
+
+        return NextResponse.json({ search: failedApifySearch ?? search });
       }
 
-      // Still running
-      return NextResponse.json({
-        status: 'running',
-        leads_count: 0,
-        error_message: null,
-      });
+      // Still running — refetch to return the latest record
+      const { data: updatedSearch } = await supabase
+        .from('searches')
+        .select('*')
+        .eq('id', searchId)
+        .single();
+
+      return NextResponse.json({ search: updatedSearch ?? search });
     }
 
     // Search is not running -- return current state
-    return NextResponse.json({
-      status: search.status,
-      leads_count: search.leads_count,
-      error_message: search.error_message,
-    });
+    return NextResponse.json({ search });
   } catch (error) {
     console.error('Errore in GET /api/search/[searchId]/status:', error);
     return NextResponse.json(
@@ -267,4 +280,29 @@ function deduplicateLeads(items: Record<string, unknown>[]): Record<string, unkn
   }
 
   return result;
+}
+
+/** Safe type casters for Apify → Supabase */
+function toStr(val: unknown): string | null {
+  if (val == null || val === '') return null;
+  return String(val);
+}
+
+function toNum(val: unknown): number | null {
+  if (val == null || val === '') return null;
+  const n = Number(val);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toInt(val: unknown): number | null {
+  if (val == null || val === '') return null;
+  const n = parseInt(String(val), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toStrArray(val: unknown): string[] | null {
+  if (val == null) return null;
+  if (Array.isArray(val)) return val.map(String);
+  if (typeof val === 'string' && val.trim()) return val.split(',').map((s) => s.trim());
+  return null;
 }

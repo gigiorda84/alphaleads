@@ -353,13 +353,28 @@ export default function SearchResultsPage() {
   /*  Export                                                            */
   /* ---------------------------------------------------------------- */
 
-  function triggerExport(format: "xlsx" | "csv") {
+  async function triggerExport(format: "xlsx" | "csv") {
     const selectedParam =
       selectedIds.size > 0 ? `&ids=${Array.from(selectedIds).join(",")}` : "";
-    window.open(
-      `/api/search/${searchId}/export?format=${format}${selectedParam}`,
-      "_blank"
-    );
+    try {
+      const res = await fetch(
+        `/api/search/${searchId}/export?format=${format}${selectedParam}`
+      );
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const name = (search?.name || "export").replace(/[^a-zA-Z0-9_\-\s]/g, "").trim() || "export";
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `${name}.${format}`;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 120000);
+    } catch {
+      /* silent */
+    }
   }
 
   /* ---------------------------------------------------------------- */
@@ -525,6 +540,20 @@ export default function SearchResultsPage() {
           key: extra.key,
           label: extra.label,
           render: (value) => {
+            if (extra.key === "company_linkedin" && value) {
+              const url = String(value);
+              return (
+                <a
+                  href={url.startsWith("http") ? url : `https://${url}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-navy-700 hover:text-orange-600 transition-colors"
+                >
+                  <span className="underline underline-offset-2 text-[13px] truncate max-w-[200px]">{url}</span>
+                  <ExternalLink size={11} className="text-neutral-400 shrink-0" />
+                </a>
+              );
+            }
             if (Array.isArray(value)) {
               return (
                 <span className="text-neutral-500 text-[12px]">

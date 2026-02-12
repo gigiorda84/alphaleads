@@ -139,15 +139,37 @@ export async function POST(request: Request) {
 
       // Try to extract a readable error from Apify's response
       let userMessage = 'Errore nell\'avvio della ricerca su Apify';
+      let allowedValues: string[] | undefined;
       try {
         const apifyError = JSON.parse(errorText);
         if (apifyError?.error?.message) {
-          userMessage = apifyError.error.message;
+          const msg: string = apifyError.error.message;
+          // Detect "must be equal to one of the allowed values" and extract them
+          const allowedMatch = msg.match(
+            /Field input\.(\w+)\.\d+ must be equal to one of the allowed values:\s*(.+)/
+          );
+          if (allowedMatch) {
+            const fieldName = allowedMatch[1];
+            const valuesStr = allowedMatch[2];
+            // Values are comma-separated, possibly quoted
+            allowedValues = valuesStr
+              .split(',')
+              .map((v) => v.trim().replace(/^"|"$/g, ''))
+              .filter(Boolean);
+            const fieldLabels: Record<string, string> = {
+              company_industry: 'Industry',
+              company_not_industry: 'Industry (Escludi)',
+            };
+            const label = fieldLabels[fieldName] || fieldName;
+            userMessage = `Valore non valido per "${label}". Scegli tra i valori consentiti:`;
+          } else {
+            userMessage = msg;
+          }
         }
       } catch { /* use default message */ }
 
       return NextResponse.json(
-        { error: userMessage },
+        { error: userMessage, allowedValues },
         { status: 500 }
       );
     }

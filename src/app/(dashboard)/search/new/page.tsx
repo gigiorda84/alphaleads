@@ -9,6 +9,8 @@ import ChipSelect from "@/components/ui/ChipSelect";
 import Button from "@/components/ui/Button";
 import FormSection from "@/components/ui/FormSection";
 import AlertInfo from "@/components/ui/AlertInfo";
+import SearchableSelect from "@/components/ui/SearchableSelect";
+import { ALLOWED_INDUSTRIES } from "@/lib/apify-industries";
 import type { SearchFilters } from "@/types/database";
 
 const SENIORITY_OPTIONS = [
@@ -505,20 +507,22 @@ export default function NewSearchPage() {
               <label className="text-neutral-600" style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, display: "block" }}>
                 Industry — Includi
               </label>
-              <TagInput
+              <SearchableSelect
+                options={ALLOWED_INDUSTRIES}
                 value={industryInclude}
                 onChange={setIndustryInclude}
-                placeholder="Settori..."
+                placeholder="Cerca settore..."
               />
             </div>
             <div>
               <label className="text-neutral-600" style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, display: "block" }}>
                 Industry — Escludi
               </label>
-              <TagInput
+              <SearchableSelect
+                options={ALLOWED_INDUSTRIES}
                 value={industryExclude}
                 onChange={setIndustryExclude}
-                placeholder="Scrivi e premi Enter per aggiungere..."
+                placeholder="Cerca settore da escludere..."
               />
             </div>
             <div>
