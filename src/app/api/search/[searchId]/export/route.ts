@@ -4,19 +4,42 @@ import * as XLSX from 'xlsx';
 import type { Lead } from '@/types/database';
 
 const EXPORT_COLUMNS: { header: string; key: keyof Lead }[] = [
+  // Contact info
+  { header: 'First Name', key: 'first_name' },
+  { header: 'Last Name', key: 'last_name' },
   { header: 'Full Name', key: 'full_name' },
   { header: 'Job Title', key: 'job_title' },
-  { header: 'Email', key: 'email' },
-  { header: 'Phone', key: 'mobile_number' },
-  { header: 'Personal Email', key: 'personal_email' },
-  { header: 'LinkedIn', key: 'linkedin' },
-  { header: 'Company', key: 'company_name' },
-  { header: 'Industry', key: 'industry' },
-  { header: 'Company Size', key: 'company_size' },
-  { header: 'Revenue', key: 'company_annual_revenue' },
-  { header: 'Location', key: 'country' },
+  { header: 'Headline', key: 'headline' },
   { header: 'Seniority', key: 'seniority_level' },
   { header: 'Functional Level', key: 'functional_level' },
+  { header: 'Email', key: 'email' },
+  { header: 'Personal Email', key: 'personal_email' },
+  { header: 'Phone', key: 'mobile_number' },
+  { header: 'LinkedIn', key: 'linkedin' },
+  { header: 'City', key: 'city' },
+  { header: 'State', key: 'state' },
+  { header: 'Country', key: 'country' },
+  // Company info
+  { header: 'Company', key: 'company_name' },
+  { header: 'Company Domain', key: 'company_domain' },
+  { header: 'Company Website', key: 'company_website' },
+  { header: 'Company LinkedIn', key: 'company_linkedin' },
+  { header: 'Industry', key: 'industry' },
+  { header: 'Company Size', key: 'company_size' },
+  { header: 'Company Description', key: 'company_description' },
+  { header: 'Revenue', key: 'company_annual_revenue' },
+  { header: 'Total Funding', key: 'company_total_funding' },
+  { header: 'Founded Year', key: 'company_founded_year' },
+  { header: 'Company Phone', key: 'company_phone' },
+  { header: 'Company Street Address', key: 'company_street_address' },
+  { header: 'Company City', key: 'company_city' },
+  { header: 'Company State', key: 'company_state' },
+  { header: 'Company Country', key: 'company_country' },
+  { header: 'Company Postal Code', key: 'company_postal_code' },
+  { header: 'Company Full Address', key: 'company_full_address' },
+  { header: 'Market Cap', key: 'company_market_cap' },
+  { header: 'Keywords', key: 'keywords' },
+  { header: 'Technologies', key: 'company_technologies' },
 ];
 
 export async function GET(
@@ -77,7 +100,11 @@ export async function GET(
       const row: Record<string, string> = {};
       for (const col of EXPORT_COLUMNS) {
         const value = lead[col.key];
-        row[col.header] = value != null ? String(value) : '';
+        if (Array.isArray(value)) {
+          row[col.header] = value.join(', ');
+        } else {
+          row[col.header] = value != null ? String(value) : '';
+        }
       }
       return row;
     });
